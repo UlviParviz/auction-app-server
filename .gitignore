@@ -1,0 +1,61 @@
+# ==========================================
+# 1. Asılılıqlar (Dependencies)
+# ==========================================
+node_modules/
+package-lock.json
+# (Yalnız npm istifadə edirsinizsə yarn.lock faylını da ignore edə bilərsiniz)
+yarn.lock 
+
+# ==========================================
+# 2. Mühit Dəyişənləri və Gizli Məlumatlar (ƏN VACİB!)
+# ==========================================
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+*.pem
+
+# ==========================================
+# 3. TypeScript / Build faylları
+# ==========================================
+dist/
+build/
+
+# ==========================================
+# 4. Log faylları
+# ==========================================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ==========================================
+# 5. Docker Volume faylları (Əgər lokalda yaranıbsa)
+# ==========================================
+postgres_data/
+redis_data/
+.docker/
+
+# ==========================================
+# 6. Əməliyyat Sistemi (OS) faylları
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# ==========================================
+# 7. Editor və IDE faylları (VS Code, WebStorm və s.)
+# ==========================================
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
