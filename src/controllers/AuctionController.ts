@@ -1,32 +1,65 @@
 import { Request, Response } from 'express';
 import { AuctionService } from '../services/AuctionService';
+import { AuthRequest } from '../middlewares/AuthMiddleware';
+import { AppError } from '../utils/AppError';
+import { AsyncWrapper } from '../utils/CatchAsync';
 
 export class AuctionController {
   constructor(private auctionService: AuctionService) {}
 
-  // YENİ ƏLAVƏ OLUNAN FUNKSİYA
-  public getAuctionById = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const id = parseInt(req.params.id as string, 10);
-      const auction = await this.auctionService.getAuction(id);
-      
-      res.status(200).json({ success: true, data: auction });
-    } catch (error: any) {
-      // Tapılmadıqda 404 xətası qaytarırıq
-      res.status(404).json({ success: false, message: error.message });
+  public createAuction = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    
+    if (!userId) {
+      throw new AppError('İstifadəçi id-si tapılmadı', 401);
     }
-  }
 
-  // ƏVVƏLKİ FUNKSİYA (Təklif vermək üçün)
-  public placeBid = async (req: Request, res: Response): Promise<void> => {
-    try {
-      const id = parseInt(req.params.id as string, 10);
-      const { amount } = req.body;
-      
-      const updatedAuction = await this.auctionService.placeBid(id, amount);
-      res.status(200).json({ success: true, data: updatedAuction });
-    } catch (error: any) {
-      res.status(400).json({ success: false, message: error.message });
+    const newAuction = await this.auctionService.createAuction(req.body, userId);
+    
+    res.status(201).json({ 
+      success: true, 
+      message: 'Hərrac uğurla yaradıldı',
+      data: newAuction 
+    });
+  });
+
+  public getAuctionById = AsyncWrapper.catch(async (req: Request, res: Response) => {
+    const id = parseInt(req.params.id as string, 10);
+    const auction = await this.auctionService.getAuction(id);
+    
+    if (!auction) {
+      throw new AppError('Hərrac tapılmadı', 404);
     }
-  }
+
+    res.status(200).json({ success: true, data: auction });
+  });
+
+  public placeBid = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
+    const id = parseInt(req.params.id as string, 10);
+    const amount = req.body.amount;
+    const userId = req.user?.id; 
+
+    if (!userId) {
+      throw new AppError('İstifadəçi id-si tapılmadı', 401);
+    }
+
+    const updatedAuction = await this.auctionService.placeBid(id, userId, amount);
+    
+    res.status(200).json({ success: true, data: updatedAuction });
+  });
+  public getMyAuctions = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    if (!userId) throw new AppError('İstifadəçi id-si tapılmadı', 401);
+
+    const auctions = await this.auctionService.getMyAuctions(userId);
+    res.status(200).json({ success: true, data: auctions });
+  });
+
+  public getMyBids = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    if (!userId) throw new AppError('İstifadəçi id-si tapılmadı', 401);
+
+    const bids = await this.auctionService.getMyBids(userId);
+    res.status(200).json({ success: true, data: bids });
+  });
 }

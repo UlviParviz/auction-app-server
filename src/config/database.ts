@@ -41,6 +41,11 @@ class Database {
     
     return res;
   }
+  
+  public async getClient() {
+    const client = await this.pool.connect();
+    return client;
+  }
 }
 
 export default new Database();

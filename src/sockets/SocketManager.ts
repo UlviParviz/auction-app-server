@@ -1,4 +1,4 @@
-import { Server as SocketIOServer } from 'socket.io';
+import { Server as SocketIOServer, Socket } from 'socket.io';
 import { Server as HttpServer } from 'http';
 
 export class SocketManager {
@@ -8,8 +8,9 @@ export class SocketManager {
   private constructor(server: HttpServer) {
     this.io = new SocketIOServer(server, {
       cors: {
-        origin: "*", 
-        methods: ["GET", "POST"]
+        origin: process.env.CLIENT_URL || "http://localhost:5173", 
+        methods: ["GET", "POST"],
+        credentials: true
       }
     });
     this.setupListeners();
@@ -30,16 +31,39 @@ export class SocketManager {
   }
 
   private setupListeners(): void {
-    this.io.on('connection', (socket) => {
-      console.log(`Yeni istifadəçi qoşuldu: ${socket.id}`);
+    this.io.on('connection', (socket: Socket) => {
+      console.log(`🟢 Yeni istifadəçi qoşuldu: ${socket.id}`);
 
-      socket.on('joinAuction', (auctionId: number) => {
-        socket.join(`auction_${auctionId}`);
-        console.log(`İstifadəçi ${socket.id} hərraca qoşuldu: auction_${auctionId}`);
+      socket.on('joinAuction', (auctionId: any) => {
+        if (!auctionId) return;
+        
+        const roomName = `auction_${auctionId}`;
+        socket.join(roomName);
+        console.log(`👤 İstifadəçi ${socket.id} qoşuldu: ${roomName}`);
+      });
+
+      socket.on('leaveAuction', (auctionId: any) => {
+        if (!auctionId) return;
+
+        const roomName = `auction_${auctionId}`;
+        socket.leave(roomName);
+        console.log(`👋 İstifadəçi ${socket.id} ayrıldı: ${roomName}`);
+      });
+
+      socket.on('authenticateUser', (userId: number) => {
+        if (!userId) return;
+        const personalRoom = `user_${userId}`;
+        socket.join(personalRoom);
+        console.log(`🔐 İstifadəçi ${socket.id} şəxsi otağına qoşuldu: ${personalRoom}`);
+      });
+
+      socket.on('logoutUser', (userId: number) => {
+        if (!userId) return;
+        socket.leave(`user_${userId}`);
       });
 
       socket.on('disconnect', () => {
-        console.log(`İstifadəçi ayrıldı: ${socket.id}`);
+        console.log(`🔴 İstifadəçi ayrıldı: ${socket.id}`);
       });
     });
   }

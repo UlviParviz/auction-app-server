@@ -1,7 +1,8 @@
 import { AuctionRepository } from '../repositories/AuctionRepository';
 import { SocketManager } from '../sockets/SocketManager';
 import { Auction } from '../models/Auction';
-import redis from '../config/redis'; // <--- BU SƏTİR ƏLAVƏ EDİLMƏLİDİR
+import { AppError } from '../utils/AppError'; 
+import redis from '../config/redis'; 
 
 export class AuctionService {
   private auctionRepo: AuctionRepository;
@@ -10,43 +11,115 @@ export class AuctionService {
     this.auctionRepo = new AuctionRepository();
   }
 
-  public async placeBid(auctionId: number, bidAmount: number): Promise<Auction> {
+  public async getMyAuctions(userId: number): Promise<Auction[]> {
+    return await this.auctionRepo.findByUserId(userId); 
+  }
+
+  public async getMyBids(userId: number): Promise<any[]> {
+    return await this.auctionRepo.findBidsByUserId(userId);
+  }
+
+  public async createAuction(data: any, ownerId: number): Promise<any> {
+    const newAuction = await this.auctionRepo.createAuction(
+      data.title,
+      data.description,
+      data.starting_price,
+      data.end_time,
+      ownerId
+    );
+    
+    return newAuction;
+  }
+
+  public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
     const auction = await this.auctionRepo.findById(auctionId);
     
-    if (!auction) throw new Error('Hərrac tapılmadı');
+    if (!auction) throw new AppError('Hərrac tapılmadı', 404);
     if (bidAmount <= auction.current_price) {
-      throw new Error('Təklif mövcud qiymətdən yüksək olmalıdır');
+      throw new AppError('Təklif mövcud qiymətdən yüksək olmalıdır', 400);
     }
 
-    const updatedAuction = await this.auctionRepo.updatePrice(auctionId, bidAmount);
+    const previousHighestBidderId = auction.highest_bidder_id; 
+    const auctionOwnerId = auction.owner_id; 
+
+    const updatedAuction = await this.auctionRepo.placeBidWithTransaction(auctionId, userId, bidAmount);
+    await redis.set(`auction_with_bids:${auctionId}`, updatedAuction, 300);
     
-    // Redis artıq tanınacaq
-    await redis.set(`auction:${auctionId}`, updatedAuction, 300);
-    
-    SocketManager.getInstance().io
-      .to(`auction_${auctionId}`)
-      .emit('bidUpdated', updatedAuction);
+    const io = SocketManager.getInstance().io;
+
+    io.to(`auction_${auctionId}`).emit('bidUpdated', updatedAuction);
+
+    if (previousHighestBidderId && previousHighestBidderId !== userId) {
+      io.to(`user_${previousHighestBidderId}`).emit('notification', {
+        type: 'OUTBID',
+        message: `Təklifiniz keçildi! Hərrac #${auctionId} üçün yeni qiymət: ${bidAmount}`,
+        auctionId: auctionId
+      });
+    }
+
+    if (auctionOwnerId !== userId) {
+      io.to(`user_${auctionOwnerId}`).emit('notification', {
+        type: 'NEW_BID',
+        message: `Hərracınıza yeni təklif gəldi: ${bidAmount}`,
+        auctionId: auctionId
+      });
+    }
     
     return updatedAuction;
   }
-  public async getAuction(id: number): Promise<Auction> {
-    const cacheKey = `auction:${id}`;
+
+  public async getAuction(id: number): Promise<any> {
+    const cacheKey = `auction_with_bids:${id}`;
     
-    // 1. Öncə məlumatın Redis-də (Cache) olub-olmadığını yoxlayırıq
-    const cachedAuction = await redis.get(cacheKey);
-    if (cachedAuction) {
-      console.log('Məlumat Redis-dən gəldi');
-      return cachedAuction;
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) return cachedData;
+    } catch (err) {
+      console.warn('Redis oxuma xətası, birbaşa bazadan oxunur...', err);
     }
 
-    // 2. Əgər Redis-də yoxdursa, PostgreSQL-dən (Bazadan) götürürük
-    const auction = await this.auctionRepo.findById(id);
-    if (!auction) throw new Error('Hərrac tapılmadı');
+    const auction = await this.auctionRepo.getAuctionWithBids(id);
+    if (!auction) throw new AppError('Hərrac tapılmadı', 404);
 
-    // 3. Növbəti sorğular sürətli olsun deyə nəticəni Redis-ə yazırıq (300 saniyəlik)
-    await redis.set(cacheKey, auction, 300);
-    console.log('Məlumat Postgres-dən gəldi və Redis-ə yazıldı');
+    try {
+      await redis.set(cacheKey, auction, 60); 
+    } catch (err) {
+      console.warn('Redis yazma xətası...', err);
+    }
     
     return auction;
+  }
+
+  public async processEndedAuctions(): Promise<void> {
+    const endedAuctions = await this.auctionRepo.findNewlyEndedAuctions();
+
+    for (const auction of endedAuctions) {
+      await this.auctionRepo.closeAuction(auction.id);
+
+      await redis.del(`auction_with_bids:${auction.id}`);
+
+      const io = SocketManager.getInstance().io;
+
+      io.to(`auction_${auction.id}`).emit('auctionEnded', {
+        auctionId: auction.id,
+        winnerId: auction.highest_bidder_id,
+        finalPrice: auction.current_price,
+        message: 'Hərrac bitdi!'
+      });
+
+      if (auction.highest_bidder_id) {
+        io.to(`user_${auction.highest_bidder_id}`).emit('notification', {
+          type: 'AUCTION_WON',
+          message: `Təbrik edirik! Siz #${auction.id} nömrəli hərracın qalibi oldunuz!`,
+          auctionId: auction.id
+        });
+      }
+
+      io.to(`user_${auction.owner_id}`).emit('notification', {
+        type: 'AUCTION_CLOSED',
+        message: `Sizin #${auction.id} nömrəli hərracınız bitdi. Yekun qiymət: ${auction.current_price}`,
+        auctionId: auction.id
+      });
+    }
   }
 }

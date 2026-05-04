@@ -18,6 +18,10 @@ class RedisCache {
 
     this.client = createClient({
       url: connectionUrl,
+      socket: {
+        connectTimeout: 10000, 
+      },
+      disableOfflineQueue: true,
     });
 
     this.client.on('error', (err) => console.error('Redis Qoşulma Xətası:', err));
