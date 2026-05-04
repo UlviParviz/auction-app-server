@@ -17,7 +17,7 @@ export class AuctionRepository {
     const result = await db.query(query, values);
     return new Auction(result.rows[0] as IAuction);
   }
-  
+
   public async findByUserId(userId: number): Promise<Auction[]> {
     const query = `
       SELECT * FROM auctions 
@@ -54,47 +54,52 @@ export class AuctionRepository {
     return new Auction(result.rows[0] as IAuction);
   }
 
-  public async placeBidWithTransaction(auctionId: number, userId: number, newPrice: number): Promise<Auction> {
-    const client = await db.getClient(); 
-    
-    try {
-      await client.query('BEGIN'); 
+public async placeBidWithTransaction(auctionId: number, userId: number, newPrice: number): Promise<Auction> {
+  const client = await db.getClient(); 
+  
+  try {
+    await client.query('BEGIN'); 
 
-      await client.query(
-        'INSERT INTO bids (auction_id, user_id, amount) VALUES ($1, $2, $3)',
-        [auctionId, userId, newPrice]
-      );
+    await client.query(
+      'INSERT INTO bids (auction_id, user_id, amount) VALUES ($1, $2, $3)',
+      [auctionId, userId, newPrice]
+    );
 
-      const result = await client.query(
-        'UPDATE auctions SET current_price = $1 WHERE id = $2 RETURNING *',
-        [newPrice, auctionId]
-      );
+    const result = await client.query(
+      'UPDATE auctions SET current_price = $1, highest_bidder_id = $2 WHERE id = $3 RETURNING *',
+      [newPrice, userId, auctionId]
+    );
 
-      await client.query('COMMIT'); 
-      return new Auction(result.rows[0] as IAuction);
-
-    } catch (error) {
-      await client.query('ROLLBACK'); 
-      throw error;
-    } finally {
-      client.release();
-    }
+    await client.query('COMMIT'); 
+    return new Auction(result.rows[0] as IAuction);
+  } catch (error) {
+    await client.query('ROLLBACK'); 
+    throw error;
+  } finally {
+    client.release();
   }
-  public async getAuctionWithBids(id: number) {
-    const auctionRes = await db.query('SELECT * FROM auctions WHERE id = $1', [id]);
-    if (auctionRes.rows.length === 0) return null;
-    const auction = auctionRes.rows[0];
+}
 
-    const bidsRes = await db.query(`
-      SELECT b.id, b.amount, b.created_at, u.first_name, u.last_name
-      FROM bids b
-      JOIN users u ON b.user_id = u.id
-      WHERE b.auction_id = $1
-      ORDER BY b.amount DESC
-    `, [id]);
+public async getAuctionWithBids(id: number) {
+  const auctionRes = await db.query('SELECT * FROM auctions WHERE id = $1', [id]);
+  if (auctionRes.rows.length === 0) return null;
+  const auction = auctionRes.rows[0];
 
-    return { ...auction, bids: bidsRes.rows };
-  }
+  const bidsRes = await db.query(`
+    SELECT b.id, b.amount, b.created_at, u.first_name, u.last_name
+    FROM bids b
+    JOIN users u ON b.user_id = u.id
+    WHERE b.auction_id = $1
+    ORDER BY b.amount DESC
+  `, [id]);
+
+  return { 
+    ...auction, 
+    highest_bidder_id: auction.highest_bidder_id, 
+    bids: bidsRes.rows 
+  };
+}
+
   public async findNewlyEndedAuctions(): Promise<any[]> {
     const query = `
       SELECT * FROM auctions 

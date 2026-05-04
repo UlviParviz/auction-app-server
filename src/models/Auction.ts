@@ -9,6 +9,7 @@ export class Auction implements IAuction {
   public end_time: Date;
   public highest_bidder_id: number;
   public owner_id: number;
+  public status: string;
 
 
   constructor(data: IAuction) {
@@ -20,5 +21,6 @@ export class Auction implements IAuction {
     this.end_time = data.end_time;
     this.highest_bidder_id = data.highest_bidder_id;
     this.owner_id = data.owner_id;
+    this.status = data.status
   }
 }

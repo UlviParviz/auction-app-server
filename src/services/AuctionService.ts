@@ -31,10 +31,22 @@ export class AuctionService {
     return newAuction;
   }
 
-  public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
+public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
     const auction = await this.auctionRepo.findById(auctionId);
     
     if (!auction) throw new AppError('Hərrac tapılmadı', 404);
+
+    // ✅ 1. TƏHLÜKƏSİZLİK: Hərracın vaxtı və statusu yoxlanılır
+    const isExpired = new Date(auction.end_time) <= new Date();
+    if (auction.status !== 'ACTIVE' || isExpired) {
+      throw new AppError('Bu hərrac artıq başa çatıb və ya bağlanıb', 400);
+    }
+
+    // ✅ 2. TƏHLÜKƏSİZLİK: Öz hərracına təklif verə bilməz
+    if (auction.owner_id === userId) {
+      throw new AppError('Öz hərracınıza təklif verə bilməzsiniz', 400);
+    }
+
     if (bidAmount <= auction.current_price) {
       throw new AppError('Təklif mövcud qiymətdən yüksək olmalıdır', 400);
     }
@@ -43,7 +55,10 @@ export class AuctionService {
     const auctionOwnerId = auction.owner_id; 
 
     const updatedAuction = await this.auctionRepo.placeBidWithTransaction(auctionId, userId, bidAmount);
-    await redis.set(`auction_with_bids:${auctionId}`, updatedAuction, 300);
+    
+    // ✅ 3. DÜZƏLİŞ: Keşə yarımçıq data YAZMIRIQ, köhnə keşi SİLİRİK!
+    // Beləliklə, növbəti dəfə baxanda dərhal bazadan ən təzə (bids daxil) datanı çəkəcək.
+    await redis.del(`auction_with_bids:${auctionId}`);
     
     const io = SocketManager.getInstance().io;
 
