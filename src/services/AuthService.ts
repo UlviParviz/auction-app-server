@@ -3,11 +3,10 @@ import jwt from 'jsonwebtoken';
 import db from '../config/database';
 
 export class AuthService {
-private generateTokenInfo(id: number) {
-
+  private generateTokenInfo(id: number, role: string) {
     const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
     
-    const token = jwt.sign({ id }, process.env.JWT_SECRET as string, { 
+    const token = jwt.sign({ id, role }, process.env.JWT_SECRET as string, { 
       expiresIn: expiresIn as any 
     });
     
@@ -25,13 +24,13 @@ private generateTokenInfo(id: number) {
     const hashedPassword = await bcrypt.hash(password, salt);
 
     const result = await db.query(
-      'INSERT INTO users (first_name, last_name, email, password) VALUES ($1, $2, $3, $4) RETURNING id, first_name, last_name, email',
+      'INSERT INTO users (first_name, last_name, email, password) VALUES ($1, $2, $3, $4) RETURNING id, first_name, last_name, email, role',
       [firstName, lastName, email, hashedPassword]
     );
 
     const user = result.rows[0];
     
-    const tokenInfo = this.generateTokenInfo(user.id);
+    const tokenInfo = this.generateTokenInfo(user.id, user.role);
     return { user, token: tokenInfo.token, expiresAt: tokenInfo.expiresAt };
   }
 
@@ -46,12 +45,12 @@ private generateTokenInfo(id: number) {
 
     delete user.password;
     
-    const tokenInfo = this.generateTokenInfo(user.id);
+    const tokenInfo = this.generateTokenInfo(user.id, user.role);
     return { user, token: tokenInfo.token, expiresAt: tokenInfo.expiresAt };
   }
 
   public async getMe(id: number) {
-    const result = await db.query('SELECT id, first_name, last_name, email, created_at FROM users WHERE id = $1', [id]);
+    const result = await db.query('SELECT id, first_name, last_name, email, role, created_at FROM users WHERE id = $1', [id]);
     if (result.rows.length === 0) throw new Error('İstifadəçi tapılmadı');
     return result.rows[0];
   }

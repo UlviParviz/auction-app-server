@@ -3,6 +3,22 @@ import { Auction } from '../models/Auction';
 import { IAuction } from '../interfaces/IAuction';
 
 export class AuctionRepository {
+  public async getAllAuctions(): Promise<any[]> {
+    const query = `
+      SELECT 
+        a.*, 
+        u.first_name AS owner_first_name, 
+        u.last_name AS owner_last_name
+      FROM auctions a
+      JOIN users u ON a.owner_id = u.id
+      WHERE a.status = 'ACTIVE' AND a.end_time > NOW()
+      ORDER BY a.created_at DESC
+    `;
+    
+    const result = await db.query(query);
+    return result.rows;
+  }
+  
   public async createAuction(title: string, description: string, startingPrice: number, endTime: string, ownerId: number): Promise<Auction> {
     const query = `
       INSERT INTO auctions 

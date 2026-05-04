@@ -11,6 +11,11 @@ export class AuctionService {
     this.auctionRepo = new AuctionRepository();
   }
 
+  public async getAllAuctions(): Promise<any[]> {
+    const auctions = await this.auctionRepo.getAllAuctions();
+    return auctions;
+  }
+
   public async getMyAuctions(userId: number): Promise<Auction[]> {
     return await this.auctionRepo.findByUserId(userId); 
   }

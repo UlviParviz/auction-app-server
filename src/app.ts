@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import auctionRoutes from './routes/AuctionRoutes';
 import authRoutes from './routes/AuthRoutes';
+import adminRoutes from './routes/AdminRoutes';
 import { AppError } from './utils/AppError';
 import { errorMiddleware } from './middlewares/ErrorMiddleware';
 
@@ -30,6 +31,7 @@ private initializeRoutes(): void {
     const apiPrefix = process.env.API_PREFIX || '/api';
     this.app.use(`${apiPrefix}/auctions`, auctionRoutes);
     this.app.use(`${apiPrefix}/auth`, authRoutes);
+    this.app.use(`${apiPrefix}/admin`, adminRoutes)
   }
   private initializeErrorHandling(): void {
     this.app.use((req: Request, res: Response, next: NextFunction) => {

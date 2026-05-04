@@ -52,7 +52,7 @@ export class ErrorMiddleware {
       this.sendErrorDev(err, res);
     } 
     else {
-      let error = { ...err, message: err.message, name: err.name, code: err.code };
+      let error = { ...err, message: err.message, name: err.name, code: err.code, isOperational: err.isOperational };
 
       if (error.code === '23505') error = this.handleDuplicateFieldsDB(error);
       if (error.name === 'JsonWebTokenError') error = this.handleJWTError();

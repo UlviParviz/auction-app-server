@@ -7,6 +7,16 @@ import { AsyncWrapper } from '../utils/CatchAsync';
 export class AuctionController {
   constructor(private auctionService: AuctionService) {}
 
+  public getAllAuctions = AsyncWrapper.catch(async (req: Request, res: Response) => {
+    const auctions = await this.auctionService.getAllAuctions();
+    
+    res.status(200).json({ 
+      success: true, 
+      count: auctions.length, 
+      data: auctions 
+    });
+  });
+
   public createAuction = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     

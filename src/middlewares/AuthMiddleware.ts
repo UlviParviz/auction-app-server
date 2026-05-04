@@ -4,7 +4,7 @@ import { AppError } from '../utils/AppError';
 import { AsyncWrapper } from '../utils/CatchAsync';
 
 export interface AuthRequest extends Request {
-  user?: { id: number };
+  user?: { id: number, role: string };
 }
 
 export class AuthMiddleware {
@@ -21,7 +21,7 @@ export class AuthMiddleware {
     }
 
     try {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: number };
+      const decoded = jwt.verify(token, process.env.JWT_SECRET as string) as { id: number, role: string };
       
       req.user = decoded; 
       
@@ -30,8 +30,15 @@ export class AuthMiddleware {
     } catch (error) {
       return next(new AppError('Sizin tokeniniz keçərsizdir və ya müddəti bitib. Yenidən daxil olun.', 401));
     }
+    
   });
 
+  public restrictToAdmin = (req: AuthRequest, res: Response, next: NextFunction) => {
+  if (!req.user || req.user.role !== 'ADMIN') {
+    return next(new AppError('Bu əməliyyat üçün icazəniz yoxdur. Yalnız Adminlər!', 403));
+  }
+  next();
+};
 
 }
 

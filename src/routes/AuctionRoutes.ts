@@ -12,6 +12,7 @@ const auctionController = new AuctionController(auctionService);
 router.get('/my-auctions', authMiddleware.protect, auctionController.getMyAuctions);
 router.get('/my-bids', authMiddleware.protect, auctionController.getMyBids);
 
+router.get('/', auctionController.getAllAuctions);
 router.get('/:id', auctionController.getAuctionById);
 
 router.post(
