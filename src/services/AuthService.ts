@@ -49,6 +49,32 @@ export class AuthService {
     return { user, token: tokenInfo.token, expiresAt: tokenInfo.expiresAt };
   }
 
+public async updatePassword(userId: number, oldPassword: string, newPassword: string) {
+  const result = await db.query('SELECT password FROM users WHERE id = $1', [userId]);
+  const user = result.rows[0];
+
+  if (!user) {
+    throw new Error('İstifadəçi tapılmadı');
+  }
+
+  const isMatch = await bcrypt.compare(oldPassword, user.password);
+  if (!isMatch) {
+    throw new Error('Köhnə şifrə yanlışdır');
+  }
+
+  const isSamePassword = await bcrypt.compare(newPassword, user.password);
+  if (isSamePassword) {
+    throw new Error('Yeni şifrə köhnə şifrə ilə eyni ola bilməz');
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const hashedNewPassword = await bcrypt.hash(newPassword, salt);
+
+  await db.query('UPDATE users SET password = $1 WHERE id = $2', [hashedNewPassword, userId]);
+
+  return true;
+}
+
   public async getMe(id: number) {
     const result = await db.query('SELECT id, first_name, last_name, email, role, created_at FROM users WHERE id = $1', [id]);
     if (result.rows.length === 0) throw new Error('İstifadəçi tapılmadı');

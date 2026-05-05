@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { AuctionController } from '../controllers/AuctionController';
 import { AuctionService } from '../services/AuctionService';
-import { authMiddleware } from '../middlewares/AuthMiddleware'; 
-import { CreateAuctionSchema, PlaceBidSchema } from '../dtos/AuctionDTO';
+import { authMiddleware } from '../middlewares/AuthMiddleware';
 import { validateMiddleware } from '../middlewares/ValidateMiddleware';
+import { AuctionDTO } from '../dtos/AuctionDTO';
 
 const router = Router();
 const auctionService = new AuctionService();
@@ -16,16 +16,16 @@ router.get('/', auctionController.getAllAuctions);
 router.get('/:id', auctionController.getAuctionById);
 
 router.post(
-  '/', 
-  authMiddleware.protect, 
-  validateMiddleware.validate(CreateAuctionSchema), 
+  '/',
+  authMiddleware.protect,
+  validateMiddleware.validate(AuctionDTO.CreateAuctionSchema),
   auctionController.createAuction
 );
 
 router.post(
-  '/:id/bid', 
-  authMiddleware.protect, 
-  validateMiddleware.validate(PlaceBidSchema), 
+  '/:id/bid',
+  authMiddleware.protect,
+  validateMiddleware.validate(AuctionDTO.PlaceBidSchema),
   auctionController.placeBid
 );
 

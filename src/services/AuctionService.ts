@@ -3,6 +3,8 @@ import { SocketManager } from '../sockets/SocketManager';
 import { Auction } from '../models/Auction';
 import { AppError } from '../utils/AppError'; 
 import redis from '../config/redis'; 
+import { AuctionTypes } from '../dtos/AuctionDTO';
+import { IAuctionWithOwner, IBidWithAuction, IAuctionWithBids } from '../interfaces/IAuction';
 
 export class AuctionService {
   private auctionRepo: AuctionRepository;
@@ -11,20 +13,19 @@ export class AuctionService {
     this.auctionRepo = new AuctionRepository();
   }
 
-  public async getAllAuctions(): Promise<any[]> {
-    const auctions = await this.auctionRepo.getAllAuctions();
-    return auctions;
+  public async getAllAuctions(): Promise<IAuctionWithOwner[]> {
+    return await this.auctionRepo.getAllAuctions();
   }
 
   public async getMyAuctions(userId: number): Promise<Auction[]> {
     return await this.auctionRepo.findByUserId(userId); 
   }
 
-  public async getMyBids(userId: number): Promise<any[]> {
+  public async getMyBids(userId: number): Promise<IBidWithAuction[]> {
     return await this.auctionRepo.findBidsByUserId(userId);
   }
 
-  public async createAuction(data: any, ownerId: number): Promise<any> {
+  public async createAuction(data: AuctionTypes.CreateAuction, ownerId: number): Promise<Auction> {
     const newAuction = await this.auctionRepo.createAuction(
       data.title,
       data.description,
@@ -36,18 +37,16 @@ export class AuctionService {
     return newAuction;
   }
 
-public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
+  public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
     const auction = await this.auctionRepo.findById(auctionId);
     
     if (!auction) throw new AppError('Hərrac tapılmadı', 404);
-
-    // ✅ 1. TƏHLÜKƏSİZLİK: Hərracın vaxtı və statusu yoxlanılır
+    
     const isExpired = new Date(auction.end_time) <= new Date();
     if (auction.status !== 'ACTIVE' || isExpired) {
       throw new AppError('Bu hərrac artıq başa çatıb və ya bağlanıb', 400);
     }
 
-    // ✅ 2. TƏHLÜKƏSİZLİK: Öz hərracına təklif verə bilməz
     if (auction.owner_id === userId) {
       throw new AppError('Öz hərracınıza təklif verə bilməzsiniz', 400);
     }
@@ -61,8 +60,6 @@ public async placeBid(auctionId: number, userId: number, bidAmount: number): Pro
 
     const updatedAuction = await this.auctionRepo.placeBidWithTransaction(auctionId, userId, bidAmount);
     
-    // ✅ 3. DÜZƏLİŞ: Keşə yarımçıq data YAZMIRIQ, köhnə keşi SİLİRİK!
-    // Beləliklə, növbəti dəfə baxanda dərhal bazadan ən təzə (bids daxil) datanı çəkəcək.
     await redis.del(`auction_with_bids:${auctionId}`);
     
     const io = SocketManager.getInstance().io;
@@ -88,12 +85,12 @@ public async placeBid(auctionId: number, userId: number, bidAmount: number): Pro
     return updatedAuction;
   }
 
-  public async getAuction(id: number): Promise<any> {
+  public async getAuction(id: number): Promise<IAuctionWithBids> {
     const cacheKey = `auction_with_bids:${id}`;
     
     try {
-      const cachedData = await redis.get(cacheKey);
-      if (cachedData) return cachedData;
+      const cachedString = await redis.get(cacheKey);
+      if (cachedString) return JSON.parse(cachedString) as IAuctionWithBids;
     } catch (err) {
       console.warn('Redis oxuma xətası, birbaşa bazadan oxunur...', err);
     }
@@ -102,7 +99,7 @@ public async placeBid(auctionId: number, userId: number, bidAmount: number): Pro
     if (!auction) throw new AppError('Hərrac tapılmadı', 404);
 
     try {
-      await redis.set(cacheKey, auction, 60); 
+      await redis.set(cacheKey, JSON.stringify(auction), 60); 
     } catch (err) {
       console.warn('Redis yazma xətası...', err);
     }

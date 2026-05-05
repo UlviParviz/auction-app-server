@@ -1,8 +1,9 @@
 import { Request, Response } from 'express';
 import { AuctionService } from '../services/AuctionService';
-import { AuthRequest } from '../middlewares/AuthMiddleware';
 import { AppError } from '../utils/AppError';
 import { AsyncWrapper } from '../utils/CatchAsync';
+import { AuctionTypes } from '../dtos/AuctionDTO';
+import { AuthRequest } from '../interfaces/IAuth';
 
 export class AuctionController {
   constructor(private auctionService: AuctionService) {}
@@ -24,7 +25,8 @@ export class AuctionController {
       throw new AppError('İstifadəçi id-si tapılmadı', 401);
     }
 
-    const newAuction = await this.auctionService.createAuction(req.body, userId);
+    const body: AuctionTypes.CreateAuction = req.body;
+    const newAuction = await this.auctionService.createAuction(body, userId);
     
     res.status(201).json({ 
       success: true, 
@@ -46,17 +48,19 @@ export class AuctionController {
 
   public placeBid = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
     const id = parseInt(req.params.id as string, 10);
-    const amount = req.body.amount;
+    
+    const body: AuctionTypes.PlaceBid = req.body;
     const userId = req.user?.id; 
 
     if (!userId) {
       throw new AppError('İstifadəçi id-si tapılmadı', 401);
     }
 
-    const updatedAuction = await this.auctionService.placeBid(id, userId, amount);
+    const updatedAuction = await this.auctionService.placeBid(id, userId, body.amount);
     
     res.status(200).json({ success: true, data: updatedAuction });
   });
+
   public getMyAuctions = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
     const userId = req.user?.id;
     if (!userId) throw new AppError('İstifadəçi id-si tapılmadı', 401);

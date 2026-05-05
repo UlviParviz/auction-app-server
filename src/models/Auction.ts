@@ -1,3 +1,4 @@
+import { AuctionStatus } from '../enums/auction/AuctionStatusEnum';
 import { IAuction } from '../interfaces/IAuction';
 
 export class Auction implements IAuction {
@@ -9,7 +10,9 @@ export class Auction implements IAuction {
   public end_time: Date;
   public highest_bidder_id: number;
   public owner_id: number;
-  public status: string;
+  public status: AuctionStatus;
+  public created_at: string | Date;
+  public updated_at: string | Date;
 
 
   constructor(data: IAuction) {
@@ -18,9 +21,11 @@ export class Auction implements IAuction {
     this.description = data.description;
     this.starting_price = data.starting_price;
     this.current_price = data.current_price;
-    this.end_time = data.end_time;
-    this.highest_bidder_id = data.highest_bidder_id;
+    this.end_time = data.end_time as Date;
+    this.highest_bidder_id = data.highest_bidder_id as number;
     this.owner_id = data.owner_id;
-    this.status = data.status
+    this.status = data.status;
+    this.created_at = data.created_at;
+    this.updated_at = data.updated_at;
   }
 }

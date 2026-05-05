@@ -1,9 +1,16 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/AppError';
+export interface CustomError extends Error {
+  statusCode?: number;
+  status?: string;
+  isOperational?: boolean;
+  code?: string;
+  errors?: unknown[];
+}
 
 export class ErrorMiddleware {
   
-  private handleDuplicateFieldsDB(err: any): AppError {
+  private handleDuplicateFieldsDB(err: CustomError): AppError {
     const message = 'Bu məlumat artıq mövcuddur. Zəhmət olmasa başqa məlumat daxil edin.';
     return new AppError(message, 400);
   }
@@ -16,8 +23,8 @@ export class ErrorMiddleware {
     return new AppError('Tokenin müddəti bitib. Zəhmət olmasa yenidən daxil olun.', 401);
   }
 
-  private sendErrorDev(err: any, res: Response): void {
-    res.status(err.statusCode).json({
+  private sendErrorDev(err: CustomError, res: Response): void {
+    res.status(err.statusCode || 500).json({
       success: false,
       status: err.status,
       error: err,
@@ -26,9 +33,9 @@ export class ErrorMiddleware {
     });
   }
 
-  private sendErrorProd(err: any, res: Response): void {
+  private sendErrorProd(err: CustomError, res: Response): void {
     if (err.isOperational) {
-      res.status(err.statusCode).json({
+      res.status(err.statusCode || 500).json({
         success: false,
         message: err.message,
       });
@@ -42,7 +49,7 @@ export class ErrorMiddleware {
     }
   }
 
-  public globalErrorHandler = (err: any, req: Request, res: Response, next: NextFunction): void => {
+  public globalErrorHandler = (err: CustomError, req: Request, res: Response, next: NextFunction): void => {
     err.statusCode = err.statusCode || 500;
     err.status = err.status || 'error';
 
@@ -52,7 +59,13 @@ export class ErrorMiddleware {
       this.sendErrorDev(err, res);
     } 
     else {
-      let error = { ...err, message: err.message, name: err.name, code: err.code, isOperational: err.isOperational };
+      let error: CustomError = { 
+        ...err, 
+        message: err.message, 
+        name: err.name, 
+        code: err.code, 
+        isOperational: err.isOperational 
+      };
 
       if (error.code === '23505') error = this.handleDuplicateFieldsDB(error);
       if (error.name === 'JsonWebTokenError') error = this.handleJWTError();
