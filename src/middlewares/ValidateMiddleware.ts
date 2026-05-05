@@ -32,12 +32,13 @@ export class ValidateMiddleware {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const formattedErrors = error.issues.map((err) => ({
-          field: err.path[err.path.length - 1], 
+        const formattedErrors = error?.issues?.map((err) => ({
+          name: 'ValidationError',
+          field: err.path[err.path.length - 1],
           message: err.message,
         }));
 
-        return next(new AppError('Məlumatların validasiya xətası', 400, formattedErrors));
+        return next(new AppError('Məlumatların validasiya xətası', 400, formattedErrors ));
       }
       
       next(error);

@@ -34,7 +34,7 @@ export class SocketManager {
     this.io.on('connection', (socket: Socket) => {
       console.log(`🟢 Yeni istifadəçi qoşuldu: ${socket.id}`);
 
-      socket.on('joinAuction', (auctionId: any) => {
+      socket.on('joinAuction', (auctionId: number) => {
         if (!auctionId) return;
         
         const roomName = `auction_${auctionId}`;
@@ -42,7 +42,7 @@ export class SocketManager {
         console.log(`👤 İstifadəçi ${socket.id} qoşuldu: ${roomName}`);
       });
 
-      socket.on('leaveAuction', (auctionId: any) => {
+      socket.on('leaveAuction', (auctionId: number) => {
         if (!auctionId) return;
 
         const roomName = `auction_${auctionId}`;

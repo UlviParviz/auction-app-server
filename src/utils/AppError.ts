@@ -1,9 +1,11 @@
+import { CustomError } from "../middlewares/ErrorMiddleware";
+
 export class AppError extends Error {
   public statusCode: number;
   public isOperational: boolean;
-  public errors?: any[]; 
+  public errors?: CustomError[]; 
 
-  constructor(message: string, statusCode: number, errors?: any[]) {
+  constructor(message: string, statusCode: number, errors?: CustomError[]) {
     super(message);
     this.statusCode = statusCode;
     this.isOperational = true;
