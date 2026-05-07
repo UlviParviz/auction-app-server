@@ -6,6 +6,7 @@ import {
   IBidWithAuction,
   IAuctionWithBids
 } from '../interfaces/IAuction';
+import { AppError } from '../utils/AppError';
 
 export class AuctionRepository {
   public async getAllAuctions(): Promise<IAuctionWithOwner[]> {
@@ -68,26 +69,30 @@ export class AuctionRepository {
     return new Auction(result.rows[0] as IAuction);
   }
 
-  public async placeBidWithTransaction(auctionId: number, userId: number, newPrice: number): Promise<Auction> {
-    const client = await db.getClient();
-
+public async placeBidWithTransaction(auctionId: number, userId: number, newPrice: number): Promise<Auction> {
+    const client = await db.getClient(); 
+    
     try {
-      await client.query('BEGIN');
+      await client.query('BEGIN'); 
+
+      const updateRes = await client.query(
+        'UPDATE auctions SET current_price = $1, highest_bidder_id = $2 WHERE id = $3 AND current_price < $1 RETURNING *',
+        [newPrice, userId, auctionId]
+      );
+
+      if (updateRes.rows.length === 0) {
+        throw new AppError('Gecikdiniz! Kimsə sizdən saniyələr əvvəl daha yüksək təklif verdi.', 400);
+      }
 
       await client.query(
         'INSERT INTO bids (auction_id, user_id, amount) VALUES ($1, $2, $3)',
         [auctionId, userId, newPrice]
       );
 
-      const result = await client.query(
-        'UPDATE auctions SET current_price = $1, highest_bidder_id = $2 WHERE id = $3 RETURNING *',
-        [newPrice, userId, auctionId]
-      );
-
-      await client.query('COMMIT');
-      return new Auction(result.rows[0] as IAuction);
+      await client.query('COMMIT'); 
+      return new Auction(updateRes.rows[0] as IAuction);
     } catch (error) {
-      await client.query('ROLLBACK');
+      await client.query('ROLLBACK'); 
       throw error;
     } finally {
       client.release();
