@@ -1,8 +1,8 @@
 import { AuctionRepository } from '../repositories/AuctionRepository';
 import { SocketManager } from '../sockets/SocketManager';
 import { Auction } from '../models/Auction';
-import { AppError } from '../utils/AppError'; 
-import redis from '../config/redis'; 
+import { AppError } from '../utils/AppError';
+import redis from '../config/redis';
 import { AuctionTypes } from '../dtos/AuctionDTO';
 import { IAuctionWithOwner, IBidWithAuction, IAuctionWithBids } from '../interfaces/IAuction';
 
@@ -18,10 +18,10 @@ export class AuctionService {
   }
 
   public async getMyAuctions(userId: number): Promise<Auction[]> {
-    return await this.auctionRepo.findByUserId(userId); 
+    return await this.auctionRepo.findByUserId(userId);
   }
 
-  public async getMyBids(userId: number): Promise<IBidWithAuction[]> {
+  public async getMyBids(userId: number): Promise<Auction[]> {
     return await this.auctionRepo.findBidsByUserId(userId);
   }
 
@@ -33,15 +33,15 @@ export class AuctionService {
       data.end_time,
       ownerId
     );
-    
+
     return newAuction;
   }
 
   public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
     const auction = await this.auctionRepo.findById(auctionId);
-    
+
     if (!auction) throw new AppError('Hərrac tapılmadı', 404);
-    
+
     const isExpired = new Date(auction.end_time) <= new Date();
     if (auction.status !== 'ACTIVE' || isExpired) {
       throw new AppError('Bu hərrac artıq başa çatıb və ya bağlanıb', 400);
@@ -55,13 +55,13 @@ export class AuctionService {
       throw new AppError('Təklif mövcud qiymətdən yüksək olmalıdır', 400);
     }
 
-    const previousHighestBidderId = auction.highest_bidder_id; 
-    const auctionOwnerId = auction.owner_id; 
+    const previousHighestBidderId = auction.highest_bidder_id;
+    const auctionOwnerId = auction.owner_id;
 
     const updatedAuction = await this.auctionRepo.placeBidWithTransaction(auctionId, userId, bidAmount);
-    
+
     await redis.del(`auction_with_bids:${auctionId}`);
-    
+
     const io = SocketManager.getInstance().io;
 
     io.to(`auction_${auctionId}`).emit('bidUpdated', updatedAuction);
@@ -81,13 +81,13 @@ export class AuctionService {
         auctionId: auctionId
       });
     }
-    
+
     return updatedAuction;
   }
 
   public async getAuction(id: number): Promise<IAuctionWithBids> {
     const cacheKey = `auction_with_bids:${id}`;
-    
+
     try {
       const cachedString = await redis.get(cacheKey);
       if (cachedString) return JSON.parse(cachedString) as IAuctionWithBids;
@@ -99,12 +99,29 @@ export class AuctionService {
     if (!auction) throw new AppError('Hərrac tapılmadı', 404);
 
     try {
-      await redis.set(cacheKey, JSON.stringify(auction), 60); 
+      await redis.set(cacheKey, JSON.stringify(auction), 60);
     } catch (err) {
       console.warn('Redis yazma xətası...', err);
     }
-    
+
     return auction;
+  }
+
+  public async deleteMyAuction(auctionId: number, userId: number): Promise<void> {
+    const auction = await this.auctionRepo.findById(auctionId);
+    if (!auction) throw new AppError('Hərrac tapılmadı', 404);
+
+    if (auction.owner_id !== userId) {
+      throw new AppError('Yalnız öz yaratdığınız hərracı silə bilərsiniz', 403);
+    }
+
+    if (auction.highest_bidder_id) {
+      throw new AppError('Bu hərraca artıq təklif verildiyi üçün onu silmək mümkün deyil', 400);
+    }
+
+    await this.auctionRepo.deleteAuction(auctionId);
+    
+    await redis.del(`auction_with_bids:${auctionId}`);
   }
 
   public async processEndedAuctions(): Promise<void> {

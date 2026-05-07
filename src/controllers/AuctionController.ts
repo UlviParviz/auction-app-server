@@ -76,4 +76,22 @@ export class AuctionController {
     const bids = await this.auctionService.getMyBids(userId);
     res.status(200).json({ success: true, data: bids });
   });
+
+  public deleteMyAuction = AsyncWrapper.catch(async (req: AuthRequest, res: Response) => {
+    const auctionId = parseInt(req.params.id as string, 10);
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw new AppError('İstifadəçi id-si tapılmadı', 401);
+    }
+
+    await this.auctionService.deleteMyAuction(auctionId, userId);
+
+    res.status(200).json({ 
+      success: true, 
+      message: 'Hərracınız uğurla silindi' 
+    });
+  });
+
+  
 }

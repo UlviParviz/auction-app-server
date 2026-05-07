@@ -1,10 +1,10 @@
 import db from '../config/database';
 import { Auction } from '../models/Auction';
-import { 
-  IAuction, 
-  IAuctionWithOwner, 
-  IBidWithAuction, 
-  IAuctionWithBids 
+import {
+  IAuction,
+  IAuctionWithOwner,
+  IBidWithAuction,
+  IAuctionWithBids
 } from '../interfaces/IAuction';
 
 export class AuctionRepository {
@@ -19,11 +19,11 @@ export class AuctionRepository {
       WHERE a.status = 'ACTIVE' AND a.end_time > NOW()
       ORDER BY a.created_at DESC
     `;
-    
+
     const result = await db.query(query);
     return result.rows as IAuctionWithOwner[];
   }
-  
+
   public async createAuction(title: string, description: string, startingPrice: number, endTime: string, ownerId: number): Promise<Auction> {
     const query = `
       INSERT INTO auctions 
@@ -32,7 +32,7 @@ export class AuctionRepository {
         ($1, $2, $3, $3, $4, $5, 'ACTIVE') 
       RETURNING *
     `;
-    
+
     const values = [title, description, startingPrice, endTime, ownerId];
     const result = await db.query(query, values);
     return new Auction(result.rows[0] as IAuction);
@@ -48,23 +48,18 @@ export class AuctionRepository {
     return result.rows.map(row => new Auction(row as IAuction));
   }
 
-  public async findBidsByUserId(userId: number): Promise<IBidWithAuction[]> {
+  public async findBidsByUserId(userId: number): Promise<Auction[]> {
     const query = `
-      SELECT 
-        b.id AS bid_id,
-        b.amount AS bid_amount,
-        b.created_at AS bid_time,
-        a.id AS auction_id,
-        a.title AS auction_title,
-        a.current_price AS current_auction_price,
-        a.status AS auction_status
-      FROM bids b
-      JOIN auctions a ON b.auction_id = a.id
-      WHERE b.user_id = $1
-      ORDER BY b.created_at DESC
+      SELECT a.* 
+      FROM auctions a
+      WHERE EXISTS (
+        SELECT 1 FROM bids b 
+        WHERE b.auction_id = a.id AND b.user_id = $1
+      )
+      ORDER BY a.created_at DESC
     `;
     const result = await db.query(query, [userId]);
-    return result.rows as IBidWithAuction[];
+    return result.rows.map(row => new Auction(row as IAuction));
   }
 
   public async findById(id: number): Promise<Auction | null> {
@@ -74,10 +69,10 @@ export class AuctionRepository {
   }
 
   public async placeBidWithTransaction(auctionId: number, userId: number, newPrice: number): Promise<Auction> {
-    const client = await db.getClient(); 
-    
+    const client = await db.getClient();
+
     try {
-      await client.query('BEGIN'); 
+      await client.query('BEGIN');
 
       await client.query(
         'INSERT INTO bids (auction_id, user_id, amount) VALUES ($1, $2, $3)',
@@ -89,10 +84,10 @@ export class AuctionRepository {
         [newPrice, userId, auctionId]
       );
 
-      await client.query('COMMIT'); 
+      await client.query('COMMIT');
       return new Auction(result.rows[0] as IAuction);
     } catch (error) {
-      await client.query('ROLLBACK'); 
+      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
@@ -112,9 +107,9 @@ export class AuctionRepository {
       ORDER BY b.amount DESC
     `, [id]);
 
-    return { 
-      ...auction, 
-      bids: bidsRes.rows 
+    return {
+      ...auction,
+      bids: bidsRes.rows
     };
   }
 
@@ -134,5 +129,9 @@ export class AuctionRepository {
       WHERE id = $1
     `;
     await db.query(query, [auctionId]);
+  }
+
+  public async deleteAuction(auctionId: number): Promise<void> {
+    await db.query('DELETE FROM auctions WHERE id = $1', [auctionId]);
   }
 }

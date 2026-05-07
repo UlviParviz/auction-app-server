@@ -29,5 +29,7 @@ router.post(
   auctionController.placeBid
 );
 
+router.delete('/:id', authMiddleware.protect, auctionController.deleteMyAuction);
+
 
 export default router;
