@@ -40,7 +40,7 @@ export class AuctionService {
     return newAuction;
   }
 
-public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
+  public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
     const auction = await this.auctionRepo.findById(auctionId);
 
     if (!auction) throw new AppError('Hərrac tapılmadı', 404);
@@ -74,7 +74,7 @@ public async placeBid(auctionId: number, userId: number, bidAmount: number): Pro
       await this.notificationService.createNotification(
         previousHighestBidderId,
         'OUTBID',
-        `Təklifiniz keçildi! Hərrac #${auctionId} üçün yeni qiymət: $${bidAmount}`,
+        `Təklifiniz keçildi! "${auction.title}" adlı hərrac üçün yeni qiymət: $${bidAmount}`,
         auctionId
       );
     }
@@ -83,7 +83,7 @@ public async placeBid(auctionId: number, userId: number, bidAmount: number): Pro
       await this.notificationService.createNotification(
         auctionOwnerId,
         'NEW_BID',
-        `Hərracınıza yeni təklif gəldi: $${bidAmount}`,
+        `"${auction.title}" adlı hərracınıza yeni təklif gəldi: $${bidAmount}`,
         auctionId
       );
     }
@@ -99,7 +99,7 @@ public async placeBid(auctionId: number, userId: number, bidAmount: number): Pro
         await this.notificationService.createNotification(
           participantId,
           'AUCTION_UPDATE',
-          `İştirak etdiyiniz hərracda (#${auctionId}) yeni təklif var. Cari qiymət: $${bidAmount}`,
+          `İştirak etdiyiniz "${auction.title}" hərracında yeni təklif var. Cari qiymət: $${bidAmount}`,
           auctionId
         );
       }
