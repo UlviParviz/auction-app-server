@@ -57,6 +57,13 @@ export class SocketManager {
         console.log(`🔐 İstifadəçi ${socket.id} şəxsi otağına qoşuldu: ${personalRoom}`);
       });
 
+      socket.on('joinUserRoom', (userId: number) => {
+        if (!userId) return;
+        const personalRoom = `user_${userId}`;
+        socket.join(personalRoom);
+        console.log(`🔐 İstifadəçi ${socket.id} şəxsi otağına qoşuldu: ${personalRoom}`);
+      });
+
       socket.on('logoutUser', (userId: number) => {
         if (!userId) return;
         socket.leave(`user_${userId}`);

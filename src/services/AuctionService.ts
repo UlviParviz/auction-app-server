@@ -5,12 +5,15 @@ import { AppError } from '../utils/AppError';
 import redis from '../config/redis';
 import { AuctionTypes } from '../dtos/AuctionDTO';
 import { IAuctionWithOwner, IBidWithAuction, IAuctionWithBids } from '../interfaces/IAuction';
+import { NotificationService } from './NotificationService';
 
 export class AuctionService {
   private auctionRepo: AuctionRepository;
+  private notificationService: NotificationService;
 
   constructor() {
     this.auctionRepo = new AuctionRepository();
+    this.notificationService = new NotificationService();
   }
 
   public async getAllAuctions(): Promise<IAuctionWithOwner[]> {
@@ -37,7 +40,7 @@ export class AuctionService {
     return newAuction;
   }
 
-  public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
+public async placeBid(auctionId: number, userId: number, bidAmount: number): Promise<Auction> {
     const auction = await this.auctionRepo.findById(auctionId);
 
     if (!auction) throw new AppError('Hərrac tapılmadı', 404);
@@ -66,39 +69,41 @@ export class AuctionService {
 
     io.to(`auction_${auctionId}`).emit('bidUpdated', updatedAuction);
 
-    // 1. Ən sonuncu yüksək təklif verənə (OUTBID) bildiriş
+
     if (previousHighestBidderId && previousHighestBidderId !== userId) {
-      io.to(`user_${previousHighestBidderId}`).emit('notification', {
-        type: 'OUTBID',
-        message: `Təklifiniz keçildi! Hərrac #${auctionId} üçün yeni qiymət: $${bidAmount}`,
-        auctionId: auctionId
-      });
+      await this.notificationService.createNotification(
+        previousHighestBidderId,
+        'OUTBID',
+        `Təklifiniz keçildi! Hərrac #${auctionId} üçün yeni qiymət: $${bidAmount}`,
+        auctionId
+      );
     }
 
     if (auctionOwnerId !== userId) {
-      io.to(`user_${auctionOwnerId}`).emit('notification', {
-        type: 'NEW_BID',
-        message: `Hərracınıza yeni təklif gəldi: $${bidAmount}`,
-        auctionId: auctionId
-      });
+      await this.notificationService.createNotification(
+        auctionOwnerId,
+        'NEW_BID',
+        `Hərracınıza yeni təklif gəldi: $${bidAmount}`,
+        auctionId
+      );
     }
 
     const participatingUserIds = await this.auctionRepo.getParticipatingUserIds(auctionId);
 
-    participatingUserIds.forEach(participantId => {
-
+    await Promise.all(participatingUserIds.map(async (participantId) => {
       if (
         participantId !== userId &&
         participantId !== auctionOwnerId &&
         participantId !== previousHighestBidderId
       ) {
-        io.to(`user_${participantId}`).emit('notification', {
-          type: 'AUCTION_UPDATE',
-          message: `İştirak etdiyiniz hərracda (#${auctionId}) yeni təklif var. Cari qiymət: $${bidAmount}`,
-          auctionId: auctionId
-        });
+        await this.notificationService.createNotification(
+          participantId,
+          'AUCTION_UPDATE',
+          `İştirak etdiyiniz hərracda (#${auctionId}) yeni təklif var. Cari qiymət: $${bidAmount}`,
+          auctionId
+        );
       }
-    });
+    }));
 
     return updatedAuction;
   }
