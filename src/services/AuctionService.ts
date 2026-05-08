@@ -66,10 +66,11 @@ export class AuctionService {
 
     io.to(`auction_${auctionId}`).emit('bidUpdated', updatedAuction);
 
+    // 1. Ən sonuncu yüksək təklif verənə (OUTBID) bildiriş
     if (previousHighestBidderId && previousHighestBidderId !== userId) {
       io.to(`user_${previousHighestBidderId}`).emit('notification', {
         type: 'OUTBID',
-        message: `Təklifiniz keçildi! Hərrac #${auctionId} üçün yeni qiymət: ${bidAmount}`,
+        message: `Təklifiniz keçildi! Hərrac #${auctionId} üçün yeni qiymət: $${bidAmount}`,
         auctionId: auctionId
       });
     }
@@ -77,10 +78,27 @@ export class AuctionService {
     if (auctionOwnerId !== userId) {
       io.to(`user_${auctionOwnerId}`).emit('notification', {
         type: 'NEW_BID',
-        message: `Hərracınıza yeni təklif gəldi: ${bidAmount}`,
+        message: `Hərracınıza yeni təklif gəldi: $${bidAmount}`,
         auctionId: auctionId
       });
     }
+
+    const participatingUserIds = await this.auctionRepo.getParticipatingUserIds(auctionId);
+
+    participatingUserIds.forEach(participantId => {
+
+      if (
+        participantId !== userId &&
+        participantId !== auctionOwnerId &&
+        participantId !== previousHighestBidderId
+      ) {
+        io.to(`user_${participantId}`).emit('notification', {
+          type: 'AUCTION_UPDATE',
+          message: `İştirak etdiyiniz hərracda (#${auctionId}) yeni təklif var. Cari qiymət: $${bidAmount}`,
+          auctionId: auctionId
+        });
+      }
+    });
 
     return updatedAuction;
   }
@@ -120,7 +138,7 @@ export class AuctionService {
     }
 
     await this.auctionRepo.deleteAuction(auctionId);
-    
+
     await redis.del(`auction_with_bids:${auctionId}`);
   }
 

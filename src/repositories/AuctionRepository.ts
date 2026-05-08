@@ -69,11 +69,11 @@ export class AuctionRepository {
     return new Auction(result.rows[0] as IAuction);
   }
 
-public async placeBidWithTransaction(auctionId: number, userId: number, newPrice: number): Promise<Auction> {
-    const client = await db.getClient(); 
-    
+  public async placeBidWithTransaction(auctionId: number, userId: number, newPrice: number): Promise<Auction> {
+    const client = await db.getClient();
+
     try {
-      await client.query('BEGIN'); 
+      await client.query('BEGIN');
 
       const updateRes = await client.query(
         'UPDATE auctions SET current_price = $1, highest_bidder_id = $2 WHERE id = $3 AND current_price < $1 RETURNING *',
@@ -89,10 +89,10 @@ public async placeBidWithTransaction(auctionId: number, userId: number, newPrice
         [auctionId, userId, newPrice]
       );
 
-      await client.query('COMMIT'); 
+      await client.query('COMMIT');
       return new Auction(updateRes.rows[0] as IAuction);
     } catch (error) {
-      await client.query('ROLLBACK'); 
+      await client.query('ROLLBACK');
       throw error;
     } finally {
       client.release();
@@ -138,5 +138,17 @@ public async placeBidWithTransaction(auctionId: number, userId: number, newPrice
 
   public async deleteAuction(auctionId: number): Promise<void> {
     await db.query('DELETE FROM auctions WHERE id = $1', [auctionId]);
+  }
+  public async getParticipatingUserIds(auctionId: number): Promise<number[]> {
+    const client = await db.getClient();
+    try {
+      const result = await client.query(
+        'SELECT DISTINCT user_id FROM bids WHERE auction_id = $1',
+        [auctionId]
+      );
+      return result.rows.map(row => row.user_id);
+    } finally {
+      client.release();
+    }
   }
 }
